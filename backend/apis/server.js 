@@ -1,0 +1,200 @@
+/*
+// This is the backend server file, for online auction marketplace
+// contains all the apis for front-end and smart contract
+*/
+
+const express = require('express');
+// const swaggerUi = require('swagger-ui-express');
+// const swaggerJSDoc = require('swagger-jsdoc');
+const bcrypt = require('bcrypt');
+const {jwt, JWT_SECRET, auth} = require("./auth");
+const {mongoose, UserModel} = require("./../db");
+const { createAuctionInDB, getAllAuctions, getAllAuctionsCreatedByUser, bid } = require('./../utilities/helper');
+
+
+const app = express();
+app.use(express.json());
+
+( async () => {
+    try {
+        const dbConnectionStatus = await mongoose.connect("");
+        console.log("DB Connection Successful");
+    } catch(e) {
+        res.status(500).json({
+            message: "DB Connection Failed! Check DB connection string."
+        })
+    }
+    
+}) ()
+
+
+
+/* Account/Authentication related APIs */
+/// signup
+app.post('/signup', async (req, res) => {
+    const name = req.body.name;
+    const email = req.body.email;
+    const password = req.body.password;
+    
+    // hash the password using bcrypt; then store in DB
+    const hashedPassword = await bcrypt.hash(password, 5); //second argument is 'saltRounds'
+    
+    try {
+        await UserModel.create({
+            name: name,
+            email: email,
+            password: hashedPassword            
+        });
+        res.status(201).json({
+            message: "account created successfully"
+        });
+    } catch (e) {
+        res.status(500).json({
+            message: "Could not create user! Try again after some time."
+        }); 
+    }   
+});
+
+
+/// sign-in / login
+app.post('/signin', async (req, res) => {
+    // check if the username and password are valid
+    const email = req.body.email;
+    const password = req.body.password;
+    
+    // check if the username is valid
+    try {        
+        const foundUser = await UserModel.findOne({
+            email: email
+        });
+        // check if the password is correct
+        const passwordMatch = await bcrypt.compare(password, foundUser.password);
+        
+        if (passwordMatch) {
+            // generate JWT token
+            const token = jwt.sign({
+                userId: foundUser._id.toString()
+            }, JWT_SECRET);
+
+            // TODO: create an expiry time and store the token in db
+
+            res.status(200).json({
+                token: token,
+                message: "User logged in"
+            });
+        }
+        else {
+            res.status(403).json({
+                message: "Incorrect Password"
+            });
+        }
+    } catch(e) {
+        res.status(403).json({
+            message: `No user found with the email: ${email}`
+        });
+    }
+
+});
+
+
+/// TODO: logout
+
+/* GET APIs */
+/// landing page ('/')
+// shows all the auctions
+// no authentication required
+app.get('/', async (req, res) => {
+    try {
+        // get all the Auctions
+        const auctions = await getAllAuctions();
+        res.json({
+            message: "Welcome to Online Auction Marketplace",
+            auctions: auctions            
+        });
+    } catch(e) {
+        res.status(500).json({
+            message: "Couldn't get all auctions. Something went wrong!"
+        })
+    }    
+})
+
+
+
+/// get all auctions created/sold by a user (authenticated)
+app.get('/auctions', auth, async (req, res) => {
+    try {
+        const allAuctionsCreatedByMe = await getAllAuctionsCreatedByUser(req.userId);
+        res.status(200).json({
+            auctionsICreated: allAuctionsCreatedByMe,
+            message: "All Auctions I have created are here."
+        });
+    } catch(e) {
+        res.status(500).json({
+            message: "Could not get the auctions you cretaed. Something went wrong!"
+        });
+        
+    }
+})
+
+/// TODO: get all the Winning Bids for the user (authenticated)
+
+
+/// create an Auction (authenticated)
+app.post('/auctions', auth, async (req, res) => {
+    const userId = req.userId; 
+
+    // extract new auction object info from 'request' body
+    const newAuctionObject = {};
+    newAuctionObject["auctionName"] = req.body.auctionName;;
+    newAuctionObject["startBidPrice"] = req.body.startBidPrice;
+    newAuctionObject["auctionCreatorId"] = userId;
+    newAuctionObject["auctionWinnerId"] = null;
+    newAuctionObject["auctionStatus"] = "Creation in-progress";
+    newAuctionObject["auctionStartDateTime"] = new Date(req.body.auctionStartTime);
+    newAuctionObject["auctionEndDateTime"] = new Date(req.body.auctionEndTime);    
+    
+    try {
+        // step-1: TODO create a new Auction smart contract for this auction: 
+
+        // step-2: create new db record in auctions table
+        const newAuction = await createAuctionInDB(newAuctionObject); 
+        res.status(201).json({
+            auctionId: newAuction._id.toString(),
+            message: "Auction created."
+        });
+    } catch(e) {
+        console.log(e);        
+        res.status(500).json({
+            message: "Could not create Auction! Something went wrong."
+        }); 
+    }    
+});
+
+/// place a bid (authenticated)
+app.post('/auctions/:auctionId/bid', auth, async (req, res) => {
+    const bidderId = req.userId; 
+    const bidAmount = req.body.bidAmount; // validation to be done at FE side: bidAmount should be >= Auction's startBidPrice
+    const auctionId = req.params.auctionId;
+    const elapsedTime = Date.now();
+    const today = new Date(elapsedTime);
+    const bidTime = today.toISOString(); // "2020-06-13T18:30:00.000Z"
+ 
+    try {
+        const result = await bid(auctionId, bidderId, bidAmount, bidTime);
+        res.status(201).json({
+            message: "Bid was successful",
+            bidId: result._id.toString()
+        });
+    } catch(e) {
+        res.status(500).json({
+            message: "'Error putting a bid!"
+        });
+        
+    }
+});
+
+// ------ PORT --------
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
