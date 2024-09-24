@@ -10,19 +10,21 @@ const bcrypt = require('bcrypt');
 const {jwt, JWT_SECRET, auth} = require("./auth");
 const {mongoose, UserModel, AuctionModel} = require("./../db");
 const { createAuctionInDB, getAllAuctions, getAllAuctionsCreatedByUser, bid, getAllAuctionsWonByABidder } = require('./../utilities/helper');
-
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 ( async () => {
     try {
         const dbConnectionStatus = await mongoose.connect("");
         console.log("DB Connection Successful");
     } catch(e) {
-        res.status(500).json({
-            message: "DB Connection Failed! Check DB connection string."
-        })
+        console.log("DB Connection failed!");
+        // res.status(500).json({
+        //     message: "DB Connection Failed! Check DB connection string."
+        // });
     }
     
 }) ()
@@ -336,7 +338,7 @@ async function closeAnAuction(auctionId) {
 }
 
 // ------ PORT --------
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
