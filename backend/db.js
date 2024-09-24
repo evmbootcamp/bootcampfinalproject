@@ -3,9 +3,11 @@ const Schema = mongoose.Schema;
 
 // users table
 const User = new Schema({
-    name: String,
-    email: {type: String, unique: true},
-    password: String    
+    wallet: {type: String, unique: true, required: true},
+    nickName: { type: String, required: false},
+    name: {type: String, required: false},
+    email: {type: String,  required: false},
+    password: {type: String, required: false}
 });
 
 const Auction = new Schema({    
@@ -13,6 +15,7 @@ const Auction = new Schema({
         type: String,
         required: true
     },
+    description: String,
     startBidPrice: Number,
     creatorId: {
         type: Schema.Types.ObjectId, 
@@ -21,10 +24,10 @@ const Auction = new Schema({
     },
     winnerId: {
         type: Schema.Types.ObjectId, 
-        ref: 'users',
-        // required: true,
-        default: null        
+        required: false,
+        ref: 'users'
     }, 
+    winningPrice: Number,
     status: String,
     startTime: {
         type: Date, // supports only two formats as inputs from user: "yyyy-mm-dd GMT" or "yyyy/mm/dd GMT"
